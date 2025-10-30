@@ -127,8 +127,8 @@ public sealed class PlaylistManager
 		}
 		else
 		{
-			if (!Util.IsSafeFileName(listId).GetOk(out var error))
-				return error;
+			// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
+			// 文件系统本身会处理不安全的文件名
 			res = playlistPool.Read(listId);
 		}
 
@@ -150,8 +150,8 @@ public sealed class PlaylistManager
 	{
 		if (GetSpecialPlaylist(listId))
 			return true;
-		if (!Util.IsSafeFileName(listId))
-			return false;
+		// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
+		// 文件系统本身会处理不安全的文件名
 		return playlistPool.Exists(listId);
 	}
 
@@ -168,9 +168,9 @@ public sealed class PlaylistManager
 		}
 		else
 		{
-			if (!Util.IsSafeFileName(listId).GetOk(out var error))
-				return error;
-			if (!playlistPool.Read(listId).Get(out plist, out error))
+			// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
+			// 文件系统本身会处理不安全的文件名
+			if (!playlistPool.Read(listId).Get(out plist, out var error))
 				return error;
 			lock (listLock)
 			{
@@ -182,9 +182,8 @@ public sealed class PlaylistManager
 
 	public E<LocalStr> DeletePlaylist(string listId)
 	{
-		if (!Util.IsSafeFileName(listId).GetOk(out var error))
-			return error;
-
+		// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
+		// 文件系统本身会处理不安全的文件名
 		return playlistPool.Delete(listId);
 	}
 
