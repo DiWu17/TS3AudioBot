@@ -120,6 +120,16 @@ namespace TS3AudioBot.Playlists
 
 		public R<IReadOnlyPlaylist, LocalStr> LoadPlaylist(string listId)
 		{
+			return LoadPlaylist(listId, false);
+		}
+
+		/// <summary>
+		/// 加载播放列表
+		/// </summary>
+		/// <param name="listId">播放列表ID</param>
+		/// <param name="forceReload">是否强制重新从文件加载（忽略缓存）</param>
+		public R<IReadOnlyPlaylist, LocalStr> LoadPlaylist(string listId, bool forceReload)
+		{
 			R<Playlist, LocalStr> res;
 			if (listId.StartsWith(".", StringComparison.Ordinal))
 			{
@@ -127,6 +137,11 @@ namespace TS3AudioBot.Playlists
 			}
 			else
 			{
+				// 如果需要强制重新加载，先清除缓存
+				if (forceReload)
+				{
+					playlistPool.ForceReload(listId);
+				}
 				// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
 				// 文件系统本身会处理不安全的文件名
 				res = playlistPool.Read(listId);
