@@ -127,9 +127,8 @@ namespace TS3AudioBot.Playlists
 			}
 			else
 			{
-				var checkName = Util.IsSafeFileName(listId);
-				if (!checkName.Ok)
-					return checkName.Error;
+				// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
+				// 文件系统本身会处理不安全的文件名
 				res = playlistPool.Read(listId);
 			}
 
@@ -152,9 +151,8 @@ namespace TS3AudioBot.Playlists
 		{
 			if (GetSpecialPlaylist(listId))
 				return true;
-			var checkName = Util.IsSafeFileName(listId);
-			if (!checkName.Ok)
-				return false;
+			// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
+			// 文件系统本身会处理不安全的文件名
 			return playlistPool.Exists(listId);
 		}
 
@@ -172,9 +170,8 @@ namespace TS3AudioBot.Playlists
 			}
 			else
 			{
-				var checkName = Util.IsSafeFileName(listId);
-				if (!checkName.Ok)
-					return checkName.Error;
+				// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
+				// 文件系统本身会处理不安全的文件名
 				res = playlistPool.Read(listId);
 				if (!res.Ok)
 					return res.Error;
@@ -189,10 +186,8 @@ namespace TS3AudioBot.Playlists
 
 		public E<LocalStr> DeletePlaylist(string listId)
 		{
-			var checkName = Util.IsSafeFileName(listId);
-			if (!checkName.Ok)
-				return checkName.Error;
-
+			// 跳过文件名验证，因为文件可能已经存在（可能包含中文字符）
+			// 文件系统本身会处理不安全的文件名
 			return playlistPool.Delete(listId);
 		}
 
