@@ -28,7 +28,7 @@ matcher = "ic3"
 long_message = "Split"
 #Limits the split count for long messages. When for example set to 1 the message will simply be trimmed to one message.
 long_message_split_limit = 1
-#Enables colors and text highlights for respones.
+#Enables colors and text highlights for responses.
 color = true
 #Limits the maximum command complexity to prevent endless loops.
 command_complexity = 64
@@ -47,7 +47,7 @@ address = ""
 #Default channel when connecting. Use a channel path or "/<id>".
 #Examples: "Home/Lobby", "/5", "Home/Afk \\/ Not Here".
 channel = ""
-#The client badges. You can set a comma seperated string with max three GUID's. Here is a list: http://yat.qa/ressourcen/abzeichen-badges/
+#The client badges. You can set a comma separated string with max three GUID's. Here is a list: http://yat.qa/ressourcen/abzeichen-badges/
 badges = ""
 #Client nickname when connecting.
 name = "TS3AudioBot"

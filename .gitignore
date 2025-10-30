@@ -253,3 +253,7 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 bots/
+ts3audiobot.toml
+ts3audiobot.db
+ts3audiobot-backup.db
+ts3audiobot-log.db
