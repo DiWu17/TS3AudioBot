@@ -50,6 +50,8 @@ namespace TS3AudioBot;
 
 public static class MainCommands
 {
+	private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+
 	internal static ICommandBag Bag { get; } = new MainCommandsBag();
 
 	internal class MainCommandsBag : ICommandBag
@@ -1062,7 +1064,7 @@ public static class MainCommands
 	[Command("list play")]
 	public static async Task CommandListPlayInternal(PlaylistManager playlistManager, PlayManager playManager, InvokerData invoker, string listId, int? index = null)
 	{
-		var plist = playlistManager.LoadPlaylist(listId).UnwrapThrow();
+		var plist = playlistManager.LoadPlaylist(listId, false).UnwrapThrow();
 
 		if (plist.Items.Count == 0)
 			throw new CommandException(strings.error_playlist_is_empty);
@@ -1076,7 +1078,7 @@ public static class MainCommands
 	[Command("list queue")]
 	public static async Task CommandListQueue(PlaylistManager playlistManager, PlayManager playManager, InvokerData invoker, string listId)
 	{
-		var plist = playlistManager.LoadPlaylist(listId).UnwrapThrow();
+		var plist = playlistManager.LoadPlaylist(listId, false).UnwrapThrow();
 		await playManager.Enqueue(invoker, plist.Items);
 	}
 
@@ -1084,8 +1086,24 @@ public static class MainCommands
 	[Usage("<name> <index>", "Lets you specify the starting index from which songs should be listed.")]
 	public static JsonValue<PlaylistInfo> CommandListShow(PlaylistManager playlistManager, ResolveContext resourceFactory, string listId, int? offset = null, int? count = null)
 	{
+		return CommandListShow(playlistManager, resourceFactory, listId, offset, count, false);
+	}
+
+	[Command("list show")]
+	[Usage("<name> <index>", "Lets you specify the starting index from which songs should be listed.")]
+	public static JsonValue<PlaylistInfo> CommandListShow(PlaylistManager playlistManager, ResolveContext resourceFactory, string listId, int? offset, int? count, ApiCall apiCall)
+	{
+		// 当通过API调用时，强制重新从文件加载以获取最新数据
+		var remoteAddress = apiCall.IpAddress?.ToString() ?? "unknown";
+		var requestPath = apiCall.RequestUrl?.PathAndQuery ?? "/api/...";
+		Log.Info("{0} 刷新播放列表缓存: {1} (请求: {2})", remoteAddress, listId, requestPath);
+		return CommandListShow(playlistManager, resourceFactory, listId, offset, count, true);
+	}
+
+	private static JsonValue<PlaylistInfo> CommandListShow(PlaylistManager playlistManager, ResolveContext resourceFactory, string listId, int? offset, int? count, bool forceReload)
+	{
 		const int maxSongs = 20;
-		var plist = playlistManager.LoadPlaylist(listId).UnwrapThrow();
+		var plist = playlistManager.LoadPlaylist(listId, forceReload).UnwrapThrow();
 		int offsetV = Tools.Clamp(offset ?? 0, 0, plist.Items.Count);
 		int countV = Tools.Clamp(count ?? maxSongs, 0, Math.Min(maxSongs, plist.Items.Count - offsetV));
 		var items = plist.Items.Skip(offsetV).Take(countV).Select(x => resourceFactory.ToApiFormat(x)).ToArray();

@@ -31,6 +31,7 @@ public sealed class PlaylistIO : IDisposable
 	private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
 	private readonly Dictionary<string, PlaylistMeta> playlistInfo = [];
 	private readonly LruCache<string, Playlist> playlistCache = new(16);
+	private readonly Dictionary<string, DateTime> playlistFileTimes = new Dictionary<string, DateTime>();
 	private readonly HashSet<string> dirtyList = [];
 	private readonly ReaderWriterLockSlim rwLock = new();
 	private bool reloadFolderCache = true;
@@ -69,9 +70,57 @@ public sealed class PlaylistIO : IDisposable
 				hasReadLock = true;
 			}
 
+			// 检查缓存中是否有值
 			if (playlistCache.TryGetValue(listId, out var playlist))
 			{
-				return playlist;
+				// 检查文件是否已被修改
+				if (playlistFileTimes.TryGetValue(listId, out var cachedTime))
+				{
+					var fi = NameToFile(listId);
+					if (fi != null && fi.Exists)
+					{
+						// 刷新文件信息以获取最新的修改时间
+						fi.Refresh();
+						var fileTime = fi.LastWriteTime;
+
+						// 如果文件被修改了，清除缓存并重新读取
+						if (fileTime > cachedTime)
+						{
+							Log.Debug("播放列表文件 '{0}' 已更新，清除缓存并重新加载", listId);
+
+							if (!hasWriteLock)
+							{
+								rwLock.ExitReadLock();
+								hasReadLock = false;
+
+								rwLock.EnterWriteLock();
+								hasWriteLock = true;
+
+								// 再次检查缓存（可能在释放读锁后发生了变化）
+								if (playlistCache.TryGetValue(listId, out _))
+								{
+									playlistCache.Remove(listId);
+									playlistFileTimes.Remove(listId);
+								}
+							}
+							else
+							{
+								playlistCache.Remove(listId);
+								playlistFileTimes.Remove(listId);
+							}
+						}
+						else
+						{
+							// 文件未修改，返回缓存的值
+							return playlist;
+						}
+					}
+				}
+				else
+				{
+					// 缓存中没有文件时间记录，返回缓存值（可能是刚启动时的情况）
+					return playlist;
+				}
 			}
 
 			if (!hasWriteLock)
@@ -83,14 +132,23 @@ public sealed class PlaylistIO : IDisposable
 				hasWriteLock = true;
 			}
 
-			if (ReadFromFile(listId).Get(out var plist, out var error))
+			var result = ReadFromFile(listId);
+
+			if (result.Ok)
 			{
-				playlistCache.Set(listId, plist);
-				return plist;
+				playlistCache.Set(listId, result.Value);
+				// 记录文件的最后修改时间
+				var fi = NameToFile(listId);
+				if (fi != null && fi.Exists)
+				{
+					fi.Refresh();
+					playlistFileTimes[listId] = fi.LastWriteTime;
+				}
+				return result.Value;
 			}
 			else
 			{
-				return error;
+				return result.Error;
 			}
 		}
 		finally
@@ -214,7 +272,6 @@ public sealed class PlaylistIO : IDisposable
 				}
 				meta.Version = version;
 				return meta;
-			}
 		}
 
 		return new PlaylistMeta { Title = "", Count = 0, Version = version };
@@ -266,6 +323,14 @@ public sealed class PlaylistIO : IDisposable
 				sw.WriteLine();
 			}
 		}
+
+		// 写入文件后，更新文件的最后修改时间记录
+		fi.Refresh();
+		if (fi.Exists)
+		{
+			playlistFileTimes[listId] = fi.LastWriteTime;
+		}
+
 		return R.Ok;
 	}
 
@@ -292,6 +357,7 @@ public sealed class PlaylistIO : IDisposable
 
 		playlistCache.Remove(listId);
 		playlistInfo.Remove(listId);
+		playlistFileTimes.Remove(listId);
 		dirtyList.Remove(listId);
 
 		try
@@ -327,9 +393,17 @@ public sealed class PlaylistIO : IDisposable
 					fileEnu = di.EnumerateFiles(pattern, SearchOption.TopDirectoryOnly); // TODO exceptions
 
 				playlistInfo.Clear();
+				// 清除文件时间缓存，因为文件夹缓存被重新加载
+				playlistFileTimes.Clear();
 				foreach (var fi in fileEnu)
 				{
 					ReadFromFile(fi.Name, true);
+					// 记录文件的最后修改时间
+					if (fi.Exists)
+					{
+						fi.Refresh();
+						playlistFileTimes[fi.Name] = fi.LastWriteTime;
+					}
 				}
 
 				reloadFolderCache = false;
@@ -355,6 +429,56 @@ public sealed class PlaylistIO : IDisposable
 	}
 
 	public void ReloadFolderCache() => reloadFolderCache = true;
+
+	/// <summary>
+	/// 强制清除指定播放列表的缓存，下次读取时会重新从文件加载
+	/// </summary>
+	public void ForceReload(string listId)
+	{
+		try
+		{
+			rwLock.EnterWriteLock();
+			// 直接移除缓存，Remove 方法返回 true 表示成功移除（即之前存在）
+			bool wasCached = playlistCache.Remove(listId);
+			playlistFileTimes.Remove(listId);
+
+			// 输出日志信息
+			if (wasCached)
+			{
+				Log.Info("播放列表缓存已清除，将从文件重新加载: {0}", listId);
+			}
+		}
+		finally
+		{
+			rwLock.ExitWriteLock();
+		}
+	}
+
+	public void ReloadFolderCache() => reloadFolderCache = true;
+
+	/// <summary>
+	/// 强制清除指定播放列表的缓存，下次读取时会重新从文件加载
+	/// </summary>
+	public void ForceReload(string listId)
+	{
+		try
+		{
+			rwLock.EnterWriteLock();
+			// 直接移除缓存，Remove 方法返回 true 表示成功移除（即之前存在）
+			bool wasCached = playlistCache.Remove(listId);
+			playlistFileTimes.Remove(listId);
+
+			// 输出日志信息
+			if (wasCached)
+			{
+				Log.Info("播放列表缓存已清除，将从文件重新加载: {0}", listId);
+			}
+		}
+		finally
+		{
+			rwLock.ExitWriteLock();
+		}
+	}
 
 	public bool Exists(string listId)
 	{

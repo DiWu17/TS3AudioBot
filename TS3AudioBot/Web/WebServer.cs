@@ -72,16 +72,44 @@ public sealed class WebServer : IDisposable
 				var up = Path.Combine(Enumerable.Repeat("..", i).ToArray());
 				var checkDir = Path.Combine(up, DefaultFrontendFolder);
 				if (Directory.Exists(checkDir))
-					return Path.GetFullPath(checkDir);
+				{
+					// 优先查找 dist 目录（构建后的文件）
+					var distDir = Path.Combine(checkDir, "dist");
+					if (Directory.Exists(distDir))
+					{
+						var fullPath = Path.GetFullPath(distDir);
+						Log.Info("Found WebInterface dist folder at: {0}", fullPath);
+						return fullPath;
+					}
+					// 如果 dist 不存在，查找 WebInterface 目录本身
+					var fullPath2 = Path.GetFullPath(checkDir);
+					Log.Warn("WebInterface dist folder not found at: {0}, using WebInterface directory instead. Please run 'npm run build' in WebInterface folder.", Path.Combine(fullPath2, "dist"));
+					return fullPath2;
+				}
 			}
 
-			var asmWebPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, DefaultFrontendFolder));
+			var asmPath = Path.GetDirectoryName(typeof(Core).Assembly.Location)!;
+			var asmWebPath = Path.GetFullPath(Path.Combine(asmPath, DefaultFrontendFolder));
 			if (Directory.Exists(asmWebPath))
+			{
+				// 优先查找 dist 目录
+				var distDir = Path.Combine(asmWebPath, "dist");
+				if (Directory.Exists(distDir))
+				{
+					var fullPath = Path.GetFullPath(distDir);
+					Log.Info("Found WebInterface dist folder at: {0}", fullPath);
+					return fullPath;
+				}
+				// 如果 dist 不存在，使用 WebInterface 目录
+				Log.Warn("WebInterface dist folder not found at: {0}, using WebInterface directory instead. Please run 'npm run build' in WebInterface folder.", Path.Combine(asmWebPath, "dist"));
 				return asmWebPath;
+			}
 		}
 		else if (Directory.Exists(webData.Path))
 		{
-			return Path.GetFullPath(webData.Path);
+			var fullPath = Path.GetFullPath(webData.Path);
+			Log.Info("Using configured WebInterface path: {0}", fullPath);
+			return fullPath;
 		}
 
 		return null;
@@ -147,7 +175,14 @@ public sealed class WebServer : IDisposable
 			}
 			else
 			{
+				// 检查目录中是否有 index.html 文件
+				var indexFile = Path.Combine(baseDir, "index.html");
+				if (!File.Exists(indexFile))
+				{
+					Log.Warn("index.html not found in WebInterface directory: {0}. The web interface may not work properly. Make sure to run 'npm run build' in the WebInterface folder.", baseDir);
+				}
 				host.UseWebRoot(baseDir);
+				Log.Info("WebInterface root set to: {0}", baseDir);
 			}
 		}
 
