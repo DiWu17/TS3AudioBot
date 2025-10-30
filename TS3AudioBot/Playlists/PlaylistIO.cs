@@ -272,6 +272,7 @@ public sealed class PlaylistIO : IDisposable
 				}
 				meta.Version = version;
 				return meta;
+			}
 		}
 
 		return new PlaylistMeta { Title = "", Count = 0, Version = version };
@@ -425,32 +426,6 @@ public sealed class PlaylistIO : IDisposable
 				rwLock.ExitWriteLock();
 			else
 				rwLock.ExitReadLock();
-		}
-	}
-
-	public void ReloadFolderCache() => reloadFolderCache = true;
-
-	/// <summary>
-	/// 强制清除指定播放列表的缓存，下次读取时会重新从文件加载
-	/// </summary>
-	public void ForceReload(string listId)
-	{
-		try
-		{
-			rwLock.EnterWriteLock();
-			// 直接移除缓存，Remove 方法返回 true 表示成功移除（即之前存在）
-			bool wasCached = playlistCache.Remove(listId);
-			playlistFileTimes.Remove(listId);
-
-			// 输出日志信息
-			if (wasCached)
-			{
-				Log.Info("播放列表缓存已清除，将从文件重新加载: {0}", listId);
-			}
-		}
-		finally
-		{
-			rwLock.ExitWriteLock();
 		}
 	}
 
